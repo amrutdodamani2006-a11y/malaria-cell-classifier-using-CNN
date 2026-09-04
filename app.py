@@ -1,5 +1,6 @@
 import streamlit as st
 import torch
+import os
 from fastai.vision.all import *
 from PIL import Image
 
@@ -12,9 +13,12 @@ torch.load = _patched_load
 
 st.set_page_config(page_title="Malaria Cell Classifier", page_icon="🔬")
 
+# Build absolute path to the model file, based on this script's location
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "malaria_model.pkl")
+
 @st.cache_resource
 def load_model():
-    return load_learner('malaria_model.pkl')
+    return load_learner(MODEL_PATH)
 
 learn = load_model()
 
