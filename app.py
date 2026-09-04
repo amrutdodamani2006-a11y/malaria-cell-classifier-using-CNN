@@ -1,26 +1,31 @@
 import streamlit as st
 import torch
-import os
-from fastai.vision.all import *
+import torch.nn as nn
+from torchvision import models, transforms
 from PIL import Image
-
-# Fix for PyTorch 2.6+ strict loading behavior
-_original_load = torch.load
-def _patched_load(*args, **kwargs):
-    kwargs['weights_only'] = False
-    return _original_load(*args, **kwargs)
-torch.load = _patched_load
+import os
 
 st.set_page_config(page_title="Malaria Cell Classifier", page_icon="🔬")
 
-# Build absolute path to the model file, based on this script's location
-MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "malaria_model.pkl")
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "malaria_weights.pth")
+CLASS_NAMES = ["Parasitized", "Uninfected"]  # same order as training (alphabetical, fastai default)
 
 @st.cache_resource
 def load_model():
-    return load_learner(MODEL_PATH)
+    model = models.resnet34(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, len(CLASS_NAMES))
+    state_dict = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
 
-learn = load_model()
+model = load_model()
+
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
 
 st.title("🔬 Malaria Cell Classifier")
 st.write("Upload a blood smear cell image to check if it's Parasitized or Uninfected.")
@@ -32,9 +37,12 @@ if uploaded_file is not None:
     st.image(img, caption="Uploaded Image", use_container_width=True)
 
     if st.button("Predict"):
-        pil_img = PILImage.create(img)
-        pred, pred_idx, probs = learn.predict(pil_img)
+        input_tensor = transform(img).unsqueeze(0)
+        with torch.no_grad():
+            output = model(input_tensor)
+            probs = torch.nn.functional.softmax(output, dim=1)[0]
 
-        st.subheader(f"Prediction: **{pred}**")
-        for i, label in enumerate(learn.dls.vocab):
+        pred_idx = torch.argmax(probs).item()
+        st.subheader(f"Prediction: **{CLASS_NAMES[pred_idx]}**")
+        for i, label in enumerate(CLASS_NAMES):
             st.write(f"{label}: {float(probs[i])*100:.2f}%")
