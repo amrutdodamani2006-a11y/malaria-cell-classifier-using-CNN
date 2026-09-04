@@ -1,6 +1,14 @@
 import streamlit as st
+import torch
 from fastai.vision.all import *
 from PIL import Image
+
+# Fix for PyTorch 2.6+ strict loading behavior
+_original_load = torch.load
+def _patched_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_load(*args, **kwargs)
+torch.load = _patched_load
 
 st.set_page_config(page_title="Malaria Cell Classifier", page_icon="🔬")
 
